@@ -141,13 +141,12 @@ if __name__ == '__main__':
     parser.add_argument('--compare-at-epoch', '-c', type=int, default=-1, help="epoch after which to compare to the approximate C repro")
     parser.add_argument('--init-separately', '-i', type=bool, default=False, help="init separately (don't init to the same weights as our C repro")
     parser.add_argument('--enable-convolution-biases', '-e', type=bool, default=False, help="learn biases during the convolution layers")
+    parser.add_argument('--file-to-compare', '-f', type=str, help="file with inputs/outputs, based on which to compare our results")
     args = parser.parse_args()
     print(vars(args))
 
     # contains test inputs and outputs as variables, defined in Python syntax
-    C_TEST_OUTPUT_FILE_NAME = "../c-deep-net/repro-of-lecun1989-repro/conv_comparison_test_output_2.txt"
-
-    with open(C_TEST_OUTPUT_FILE_NAME, 'r') as f:
+    with open(args.file_to_compare, 'r') as f:
         test_output = f.read()
         exec(test_output)
     W_c1 = torch.tensor(W_c1)
@@ -181,13 +180,7 @@ if __name__ == '__main__':
 
     # init data
     Xtr, Ytr = torch.load('train1989.pt')
-    print(Xtr.shape)
-    # Xtr = Xtr.reshape(Xtr.shape[0], 256)
-    print(Xtr.shape)
     Xte, Yte = torch.load('test1989.pt')
-    # Xte = Xte.reshape(Xte.shape[0], 256)
-    print(Xte.shape)
-    # print("Printing stop")
 
     # init optimizer
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
