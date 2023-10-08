@@ -18,12 +18,51 @@ from tensorboardX import SummaryWriter # pip install tensorboardX
 
 # -----------------------------------------------------------------------------
 
+class ApproxNet(nn.Module):
+    """ Approximate repro (see README) of a repro of the 1989 LeCun conv net"""
+
+    def __init__(self, W_c1, W_c2, W_l1, W_l2, b1, b2, enable_convolution_biases=False, init_separately=False):
+        super().__init__()
+        self.b_c1 = torch.zeros(12, 8, 8)
+        self.b_c2 = torch.zeros(8, 4, 4)
+        # if enabled, then we learn biases along with the convolution
+        if enable_convolution_biases:
+            self.b_c1 = nn.Parameter(self.b_c1)
+            self.b_c2 = nn.Parameter(self.b_c2)
+        # if enabled, then we initialize independently of our C repro init
+        if init_separately:
+            self.W_c1 = nn.Parameter(winit(25, 5, 5, 1, 12))
+            self.W_c2 = nn.Parameter(winit(25 * 12, 5, 5, 12, 8))
+            self.W_l1 = nn.Parameter(winit(8 * 4 * 4, 12 * 4 * 4, 30))
+            self.W_l2 = nn.Parameter(winit(8 * 4 * 4, 12 * 4 * 4, 30))
+            self.b1 = nn.Parameter(torch.zeros(30))
+            self.b2 = nn.Parameter(torch.zeros(10))
+        else:
+            self.W_c1 = nn.Parameter(W_c1)
+            self.W_c2 = nn.Parameter(W_c2)
+            self.W_l1 = nn.Parameter(W_l1)
+            self.W_l2 = nn.Parameter(W_l2)
+            self.b1 = nn.Parameter(b1)
+            self.b2 = nn.Parameter(b2)
+
+    def forward(self, x):
+        x = F.pad(x, (2, 1, 2, 1), 'constant', -1.0)
+        x = F.conv2d(x, self.W_c1.permute(3, 2, 0, 1), stride=2) + self.b_c1
+        x = torch.tanh(x)
+        x = F.pad(x, (2, 1, 2, 1), 'constant', -1.0)
+        x = F.conv2d(x, self.W_c2.permute(3, 2, 0, 1), stride=2) + self.b_c2
+        x = torch.tanh(x)
+        x = x.permute(0, 2, 3, 1).reshape(x.shape[0], 4 * 4 * 8) @ self.W_l1 + self.b1
+        x = torch.tanh(x)
+        x = x @ self.W_l2 + self.b2
+        x = torch.tanh(x)
+        return x
+
 class Net(nn.Module):
     """ 1989 LeCun ConvNet per description in the paper """
 
     def __init__(self):
         super().__init__()
-
         # initialization as described in the paper to my best ability, but it doesn't look right...
         winit = lambda fan_in, *shape: (torch.rand(*shape) - 0.5) * 2 * 2.4 / fan_in**0.5
         macs = 0 # keep track of MACs (multiply accumulates)
@@ -67,7 +106,6 @@ class Net(nn.Module):
         self.acts = acts
 
     def forward(self, x):
-
         # x has shape (1, 1, 16, 16)
         x = F.pad(x, (2, 2, 2, 2), 'constant', -1.0) # pad by two using constant -1 for background
         x = F.conv2d(x, self.H1w, stride=2) + self.H1b
@@ -90,7 +128,7 @@ class Net(nn.Module):
         x = x @ self.outw + self.outb
         x = torch.tanh(x)
 
-         # x is finally shape (1, 10)
+        # x is finally shape (1, 10)
         return x
 
 # -----------------------------------------------------------------------------
@@ -100,8 +138,30 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train a 1989 LeCun ConvNet on digits")
     parser.add_argument('--learning-rate', '-l', type=float, default=0.03, help="SGD learning rate")
     parser.add_argument('--output-dir'   , '-o', type=str,   default='out/base', help="output directory for training logs")
+    parser.add_argument('--compare-at-epoch', '-c', type=int, default=-1, help="epoch after which to compare to the approximate C repro")
+    parser.add_argument('--init-separately', '-i', type=bool, default=False, help="init separately (don't init to the same weights as our C repro")
+    parser.add_argument('--enable-convolution-biases', '-e', type=bool, default=False, help="learn biases during the convolution layers")
     args = parser.parse_args()
     print(vars(args))
+
+    # contains test inputs and outputs as variables, defined in Python syntax
+    C_TEST_OUTPUT_FILE_NAME = "../c-deep-net/repro-of-lecun1989-repro/conv_comparison_test_output_2.txt"
+
+    with open(C_TEST_OUTPUT_FILE_NAME, 'r') as f:
+        test_output = f.read()
+        exec(test_output)
+    W_c1 = torch.tensor(W_c1)
+    W_c2 = torch.tensor(W_c2)
+    W_l1 = torch.tensor(W_l1)
+    W_l2 = torch.tensor(W_l2)
+    b1 = torch.tensor(b1)
+    b2 = torch.tensor(b2)
+    newW_c1 = torch.tensor(newW_c1)
+    newW_c2 = torch.tensor(newW_c2)
+    newW_l1 = torch.tensor(newW_l1)
+    newW_l2 = torch.tensor(newW_l2)
+    newb1 = torch.tensor(newb1)
+    newb2 = torch.tensor(newb2)
 
     # init rng
     torch.manual_seed(1337)
@@ -115,15 +175,19 @@ if __name__ == '__main__':
     writer = SummaryWriter(args.output_dir)
 
     # init a model
-    model = Net()
+    model = ApproxNet(W_c1, W_c2, W_l1, W_l2, b1, b2, args.enable_convolution_biases, args.init_separately)
     print("model stats:")
     print("# params:      ", sum(p.numel() for p in model.parameters())) # in paper total is 9,760
-    print("# MACs:        ", model.macs)
-    print("# activations: ", model.acts)
 
     # init data
     Xtr, Ytr = torch.load('train1989.pt')
+    print(Xtr.shape)
+    # Xtr = Xtr.reshape(Xtr.shape[0], 256)
+    print(Xtr.shape)
     Xte, Yte = torch.load('test1989.pt')
+    # Xte = Xte.reshape(Xte.shape[0], 256)
+    print(Xte.shape)
+    # print("Printing stop")
 
     # init optimizer
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate)
@@ -148,7 +212,6 @@ if __name__ == '__main__':
 
             # fetch a single example into a batch of 1
             x, y = Xtr[[step_num]], Ytr[[step_num]]
-
             # forward the model and the loss
             yhat = model(x)
             loss = torch.mean((y - yhat)**2)
@@ -157,9 +220,16 @@ if __name__ == '__main__':
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
-
         # after epoch epoch evaluate the train and test error / metrics
         print(pass_num + 1)
+        if pass_num + 1 == args.compare_at_epoch:
+            assert torch.allclose(model.W_c1, newW_c1, rtol=1e-3, atol=1e-3)
+            assert torch.allclose(model.W_c2, newW_c2, rtol=1e-3, atol=1e-3)
+            assert torch.allclose(model.W_l1, newW_l1, rtol=1e-3, atol=1e-3)
+            assert torch.allclose(model.W_l2, newW_l2, rtol=1e-3, atol=1e-3)
+            assert torch.allclose(model.b1, newb1, rtol=1e-3, atol=1e-3)
+            assert torch.allclose(model.b2, newb2, rtol=1e-3, atol=1e-3)
+            print("Passed comparison test!")
         eval_split('train')
         eval_split('test')
 
