@@ -1,6 +1,8 @@
 # This Fork
 
-This fork just makes some slight modifications that are used to validate a separate (approximate) repro done in C of the same paper. The C repro can be found [here](https://github.com/ramvenkat98/c-deep-net).
+This fork of the original repo just makes some slight modifications that are used to validate a separate (approximate) repro done in C of the same paper. The C repro can be found [here](https://github.com/ramvenkat98/c-deep-net).
+
+---
 
 # lecun1989-repro
 
