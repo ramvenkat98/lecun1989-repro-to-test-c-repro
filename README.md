@@ -1,6 +1,8 @@
 # This Fork
 
-This fork of the original repo just makes some slight modifications that are used to validate a separate (approximate) repro done in C of the same paper. The C repro can be found [here](https://github.com/ramvenkat98/c-deep-net).
+This fork of the original repo just makes some slight modifications that are used to validate a separate (approximate) repro done in C of the same paper. The C repro can be found [here](https://github.com/ramvenkat98/c-deep-net). There are two main modifications in this fork:
+1. Prepro: We save the same data files as plain-text files instead of using torch.save so that we can easily read in that data from our C file.
+2. Repro: We add a class called `ApproxNet` that applies the approximations mentioned in the C repro to the original net. We use the results of ApproxNet to compare with the C version (for more details, refer to the C repro).
 
 ---
 
