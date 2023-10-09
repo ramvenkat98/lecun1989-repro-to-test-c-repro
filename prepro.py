@@ -41,5 +41,14 @@ for split in {'train', 'test'}:
 
         # set the correct class to have target of +1.0
         Y[i, yint] = 1.0
-
-    torch.save((X, Y), split + '1989.pt')
+    with open(split + '1989.txt', 'w') as f:
+        f.write(f"{len(X)}\n")
+        for i in range(len(X)):
+            for j in range(len(X[i][0])):
+                for k in range(len(X[i][0][j])):
+                    f.write(f"{X[i][0][j][k].item()} ")
+            f.write("\n")
+        for i in range(len(Y)):
+            for j in range(len(Y[i])):
+                f.write(f"{Y[i][j]} ")
+            f.write("\n")
