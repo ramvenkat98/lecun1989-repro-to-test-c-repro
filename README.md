@@ -4,6 +4,8 @@ This fork of the original repo just makes some slight modifications that are use
 1. Prepro: We save the same data files as plain-text files instead of using torch.save so that we can easily read in that data from our C file.
 2. Repro: We add a class called `ApproxNet` that applies the approximations mentioned in the C repro to the original net. We use the results of ApproxNet to compare with the C version (for more details, refer to the C repro).
 
+**Everything below this is from the original repro, only the changes above are from our fork.**
+
 ---
 
 # lecun1989-repro
